@@ -1,0 +1,56 @@
+trigger:
+  branches:
+    include:
+      - feature/dev
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  azureSubscription: '27b2d9d9-e0fb-4583-82f9-65f818f37a24'
+  resourceGroupName: 'RG-Skywalker-Gen-AI-powered-pathways'
+  containerRegistryName: 'azure-pipeline-registry'
+  containerRegistrySku: 'Basic'
+  servicePlanName: 'azure-pipeline-ServicePlan'
+  webAppName: 'testdeployment'
+  imageName: 'flask-app'
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.x'
+    addToPath: true
+
+- script: |
+    python -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+  displayName: 'Install dependencies'
+
+- script: |
+    az login --service-principal -u $(servicePrincipalId) -p $(servicePrincipalKey) --tenant $(tenantId)
+    az account set --subscription $(azureSubscription)
+    if ! az acr check-name -n $(containerRegistryName) --query 'nameAvailable' -o tsv; then
+      echo "Container registry exists"
+    else
+      echo "Creating container registry"
+      az acr create --resource-group $(resourceGroupName) --name $(containerRegistryName) --sku $(containerRegistrySku)
+    fi
+  displayName: 'Check/Create Container Registry'
+
+- script: |
+    az appservice plan create --name $(servicePlanName) --resource-group $(resourceGroupName) --sku B1 --is-linux
+  displayName: 'Create Service Plan'
+
+- script: |
+    az acr build --registry $(containerRegistryName) --image $(imageName):$(Build.BuildId) .
+  displayName: 'Build Docker Image'
+
+- script: |
+    az webapp create --resource-group $(resourceGroupName) --plan $(servicePlanName) --name $(webAppName) --deployment-container-image-name $(containerRegistryName).azurecr.io/$(imageName):$(Build.BuildId)
+    az webapp config container set --name $(webAppName) --resource-group $(resourceGroupName) --docker-custom-image-name $(containerRegistryName).azurecr.io/$(imageName):$(Build.BuildId) --docker-registry-server-url https://$(containerRegistryName).azurecr.io
+  displayName: 'Deploy to Azure Web App'
+
+- script: |
+    az webapp restart --name $(webAppName) --resource-group $(resourceGroupName)
+  displayName: 'Restart Web App'
