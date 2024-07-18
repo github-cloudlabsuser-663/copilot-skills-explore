@@ -5,6 +5,9 @@ import os
 # Constants
 CUSTOMER_FILE = 'data/customers.csv'
 
+# Constants
+CUSTOMER_FILE = os.getenv('CUSTOMER_FILE', 'data/customers.csv')
+
 def add_customer(name, age, income, credit_score):
     """
     Adds a new customer to the customer file.
@@ -16,13 +19,17 @@ def add_customer(name, age, income, credit_score):
     - credit_score (int): The credit score of the customer.
 
     Returns:
-    - int: The customer ID of the newly added customer.
+    - int: The customer ID of the newly added customer, or None if an error occurred.
     """
-    customer_id = get_next_customer_id()
-    with open(CUSTOMER_FILE, mode='a', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file)
-        writer.writerow([customer_id, name, age, income, credit_score])
-    return customer_id
+    try:
+        customer_id = get_next_customer_id()
+        with open(CUSTOMER_FILE, mode='a', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow([customer_id, name, age, income, credit_score])
+        return customer_id
+    except Exception as e:
+        print(f"An error occurred while adding the customer: {e}")
+        return None
 
 def get_next_customer_id():
     """
